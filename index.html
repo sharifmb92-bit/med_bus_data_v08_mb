@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1d23">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/824/824411.png">
+    <title>Med Basha v98.9 - Turnos Partidos Live</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyCLi_wlkO5zB52s6Kegc6ANZVeH6mHP5DY",
+            authDomain: "misturnos-fe3ea.firebaseapp.com",
+            projectId: "misturnos-fe3ea",
+            storageBucket: "misturnos-fe3ea.firebasestorage.app",
+            messagingSenderId: "1029095925443",
+            appId: "1:1029095925443:web:873240d85ac5160f392476"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const userDoc = doc(db, "usuarios", "conductor_menorca", "datos", "history");
+
+        window.cloudSave = async (data) => { 
+            try { await setDoc(userDoc, { payload: data, lastUpdate: new Date().toISOString() }); } catch (e) { console.error(e); } 
+        };
+        window.setupSync = (callback) => { 
+            onSnapshot(userDoc, (docSnap) => { if (docSnap.exists()) callback(docSnap.data().payload); }); 
+        };
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    
+    <style>
+        [x-cloak] { display: none !important; }
+        body { background-color: #1a1d23; color: #e2e8f0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .card-main { background: #23272e; border-radius: 1.2rem; border: 2px solid #2d333f; overflow: hidden; }
+        .block-hora { background-color: #1e293b; padding: 12px; }
+        input { background: transparent; border: none; color: white; font-weight: 800; outline: none; width: 100%; }
+        input[type="time"] { font-size: 1.8rem; color: #60a5fa; }
+        input[type="number"] { font-size: 1.5rem; color: #22d3ee; }
+        .label-custom { font-size: 10px; font-weight: 900; text-transform: uppercase; }
+        .nav-btn { flex: 1; padding: 16px; text-align: center; font-weight: 900; border-bottom: 4px solid transparent; }
+        .nav-active { border-color: #3b82f6; color: #3b82f6; background: #23272e; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; }
+        .badge-aviso { animation: pulse 2s infinite; background-color: #facc15 !important; color: #000 !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body x-data="tmsaApp()" x-init="initApp()">
+
+    <nav class="flex sticky top-0 z-50 bg-[#1a1d23] border-b border-white/10">
+        <button @click="view = 'registro'" :class="view === 'registro' ? 'nav-active' : 'text-gray-500'" class="nav-btn uppercase text-xs">Registro</button>
+        <button @click="view = 'historial'" :class="view === 'historial' ? 'nav-active' : 'text-gray-500'" class="nav-btn uppercase text-xs">Historial Mensual</button>
+    </nav>
+
+    <main x-show="view === 'registro'" class="p-4 space-y-4 pb-48" x-cloak>
+        
+        <div class="card-main p-3">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-xs font-black text-blue-400 uppercase tracking-widest" x-text="mesNombre + ' ' + año"></span>
+                <div class="flex gap-4">
+                    <button @click="cambiarMes(-1)" class="material-symbols-outlined text-gray-400">chevron_left</button>
+                    <button @click="cambiarMes(1)" class="material-symbols-outlined text-gray-400">chevron_right</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-center">
+                <template x-for="dia in diasCalendario" :key="dia.fecha">
+                    <div @click="seleccionarDia(dia.fecha)" class="py-2 flex flex-col items-center cursor-pointer relative">
+                        <span :class="[dia.isHoy ? 'bg-white text-black rounded-lg px-2' : 'text-gray-300', dia.fecha === fechaSeleccionada ? 'ring-2 ring-blue-500 rounded-lg px-1.5' : '']" class="text-sm font-bold" x-text="dia.num"></span>
+                        <div class="flex gap-1 justify-center">
+                            <template x-if="estadoJornada(dia.fecha) === 'continua'"><div class="dot bg-blue-500"></div></template>
+                            <template x-if="estadoJornada(dia.fecha) === 'partida'"><div class="dot bg-orange-500"></div></template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <section class="card-main">
+            <div class="p-3 bg-blue-900/20 flex justify-between items-center border-b border-white/5">
+                <span class="text-[10px] font-black text-blue-300 uppercase">Primer Tramo</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-black text-yellow-500 uppercase">Bus:</span>
+                    <input type="text" x-model="form.bus1" class="w-16 bg-black/40 text-center rounded-lg py-1 text-yellow-400 font-black text-xl uppercase">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 border-b border-white/5">
+                <div class="block-hora border-r border-white/5"><label class="label-custom text-blue-300">Entrada</label><input type="time" x-model="form.horaE1" @input="calcularTodo()"></div>
+                <div class="block-hora"><label class="label-custom text-red-400">Salida</label><input type="time" x-model="form.horaS1" @input="validarYCalcular()"></div>
+            </div>
+            <div class="grid grid-cols-2 border-b border-white/5 bg-black/10">
+                <div class="block-hora border-r border-white/5"><label class="label-custom text-cyan-400">KM Inicio</label><input type="number" x-model="form.kmI1" @input="calcularTodo()"></div>
+                <div class="block-hora"><label class="label-custom text-cyan-400">KM Fin</label><input type="number" x-model="form.kmF1" @input="calcularTodo()"></div>
+            </div>
+        </section>
+
+        <button @click="togglePartido()" 
+                :class="form.esPartida ? 'bg-orange-600 border-orange-400' : 'bg-gray-700 border-gray-600'"
+                class="w-full py-4 rounded-2xl border-2 text-white font-black uppercase text-[10px] flex items-center justify-center gap-3">
+            <span class="material-symbols-outlined" x-text="form.esPartida ? 'close' : 'add_circle'"></span>
+            <span x-text="form.esPartida ? 'Quitar Tramo Tarde' : 'Añadir Tramo Tarde (Partido)'"></span>
+        </button>
+
+        <section class="card-main border-orange-500/30" x-show="form.esPartida" x-transition>
+            <div class="p-3 bg-orange-900/20 flex justify-between items-center border-b border-white/5">
+                <span class="text-[10px] font-black text-orange-400 uppercase">Segundo Tramo</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-black text-yellow-500 uppercase">Bus:</span>
+                    <input type="text" x-model="form.bus2" class="w-16 bg-black/40 text-center rounded-lg py-1 text-yellow-400 font-black text-xl uppercase">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 border-b border-white/5">
+                <div class="block-hora border-r border-white/5"><label class="label-custom text-blue-300">Entrada 2</label><input type="time" x-model="form.horaE2" @input="calcularTodo()"></div>
+                <div class="block-hora"><label class="label-custom text-red-400">Salida 2</label><input type="time" x-model="form.horaS2" @input="calcularTodo()"></div>
+            </div>
+            <div class="grid grid-cols-2 border-b border-white/5 bg-black/10">
+                <div class="block-hora border-r border-white/5"><label class="label-custom text-cyan-400">KM Inicio 2</label><input type="number" x-model="form.kmI2" @input="calcularTodo()"></div>
+                <div class="block-hora"><label class="label-custom text-cyan-400">KM Fin 2</label><input type="number" x-model="form.kmF2" @input="calcularTodo()"></div>
+            </div>
+        </section>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button @click="toggleDiet('comida')" :class="estiloBoton(form.comida)" class="py-5 rounded-2xl border-2 flex flex-col items-center">
+                <span class="material-symbols-outlined text-2xl">restaurant</span>
+                <span class="text-[10px] font-black uppercase mt-1">Comida</span>
+            </button>
+            <button @click="toggleDiet('cena')" :class="estiloBoton(form.cena)" class="py-5 rounded-2xl border-2 flex flex-col items-center">
+                <span class="material-symbols-outlined text-2xl">dinner_dining</span>
+                <span class="text-[10px] font-black uppercase mt-1">Cena</span>
+            </button>
+        </div>
+
+        <button @click="guardarJornada()" class="w-full py-5 bg-blue-700 text-white font-black rounded-2xl shadow-xl uppercase text-sm border-b-4 border-blue-900 active:scale-95">Archivar Jornada</button>
+    </main>
+
+    <main x-show="view === 'historial'" class="p-4 space-y-4 pb-24" x-cloak>
+        <div id="capture-area">
+            <template x-for="semana in historyByWeeks" :key="semana.num">
+                <div class="card-main mb-6">
+                    <div class="bg-blue-900/30 p-2 text-[10px] font-black uppercase text-blue-300 flex justify-between">
+                        <span x-text="'Semana ' + semana.num"></span>
+                        <span x-text="semana.totalH.toFixed(2) + 'h'"></span>
+                    </div>
+                    <table class="w-full text-[10px] text-left">
+                        <thead class="bg-black/30 text-gray-500 uppercase font-black text-[8px]">
+                            <tr>
+                                <th class="p-3">Fecha</th>
+                                <th>Bus</th>
+                                <th>Dietas</th>
+                                <th>Noc</th>
+                                <th class="text-right pr-4">KM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in semana.dias" :key="item.fecha">
+                                <tr class="border-t border-white/5">
+                                    <td class="p-3 text-white font-bold" x-text="item.fecha.split('-').reverse().slice(0,2).join('/')"></td>
+                                    <td class="text-yellow-500 font-black uppercase" x-text="item.bus"></td>
+                                    <td class="text-green-400 font-black" x-text="item.dieta"></td>
+                                    <td class="text-indigo-300 font-bold" x-text="item.noctH"></td>
+                                    <td class="text-cyan-400 text-right pr-4 font-black" x-text="item.km"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+
+            <div class="card-main p-6 bg-blue-950/20 border-blue-500/30 grid grid-cols-2 gap-6">
+                <div><p class="text-[9px] text-gray-500 font-black uppercase">Horas Totales</p><p class="text-3xl font-black text-white" x-text="totalMesH"></p></div>
+                <div class="text-right"><p class="text-[9px] text-indigo-400 font-black uppercase">Suma Nocturnas</p><p class="text-3xl font-black text-indigo-300" x-text="totalMesN"></p></div>
+                <div><p class="text-[9px] text-cyan-400 font-black uppercase">Kilómetros</p><p class="text-3xl font-black text-cyan-400" x-text="totalMesK"></p></div>
+                <div class="text-right"><p class="text-[9px] text-green-500 font-black uppercase">Dietas</p><p class="text-3xl font-black text-green-400" x-text="totalMesD"></p></div>
+            </div>
+        </div>
+    </main>
+
+    <footer x-show="view === 'registro'" class="fixed bottom-0 w-full p-5 bg-[#1a1d23]/95 border-t border-white/10 flex justify-between items-center z-50 backdrop-blur-md">
+        <div><p class="text-[10px] text-gray-500 font-black uppercase">KM Hoy</p><p class="text-2xl font-black text-cyan-400" x-text="res.kmTotales"></p></div>
+        <div class="text-right"><p class="text-[10px] text-yellow-500 font-black uppercase">Cómputo Día</p><p class="text-5xl font-black text-white" x-text="res.total"></p></div>
+    </footer>
+
+    <script>
+        function tmsaApp() {
+            return {
+                view: 'registro', fechaSeleccionada: new Date().toISOString().split('T')[0],
+                form: { esPartida: false, bus1: '', bus2: '', horaE1: '', horaS1: '', kmI1: '', kmF1: '', horaE2: '', horaS2: '', kmI2: '', kmF2: '', comida: 'NO', cena: 'NO' },
+                res: { total: '00:00', kmTotales: 0, noctMin: 0 },
+                history: [], mes: new Date().getMonth(), año: new Date().getFullYear(), mesNombre: '',
+                totalMesH: 0, totalMesN: 0, totalMesK: 0, totalMesD: 0,
+
+                initApp() {
+                    this.history = JSON.parse(localStorage.getItem('tmsa_history_v98') || '[]');
+                    this.renderCalendario(); this.cargarHojaDesdeMemoria();
+                    window.setupSync((d) => { if(d){ this.history = d; this.renderCalendario(); }});
+                },
+
+                // Lógica de puntos en tiempo real
+                estadoJornada(f) {
+                    // Si es el día que estamos editando ahora mismo
+                    if (f === this.fechaSeleccionada) {
+                        return this.form.esPartida ? 'partida' : (this.form.horaE1 ? 'continua' : null);
+                    }
+                    // Si no, mirar en el historial guardado
+                    const found = this.history.find(h => h.fecha === f);
+                    return found ? found.tipo : null;
+                },
+
+                togglePartido() {
+                    this.form.esPartida = !this.form.esPartida;
+                    this.calcularTodo();
+                },
+
+                calcNoct(ini, fin) {
+                    if(!ini || !fin) return 0;
+                    let mN = 0;
+                    let [hE, mE] = ini.split(':').map(Number);
+                    let [hS, mS] = fin.split(':').map(Number);
+                    let cur = new Date(2000, 0, 1, hE, mE);
+                    let end = new Date(2000, 0, 1, hS, mS);
+                    if(end <= cur) end.setDate(end.getDate() + 1);
+                    while(cur < end) {
+                        let h = cur.getHours();
+                        if(h >= 22 || h < 6) mN++;
+                        cur.setMinutes(cur.getMinutes() + 1);
+                    }
+                    return mN / 60;
+                },
+
+                calcularTodo() {
+                    let totalMin = 0;
+                    // Nocturnidad sumada de ambos tramos
+                    let n1 = this.calcNoct(this.form.horaE1, this.form.horaS1);
+                    let n2 = this.form.esPartida ? this.calcNoct(this.form.horaE2, this.form.horaS2) : 0;
+                    this.res.noctMin = (n1 + n2).toFixed(2);
+                    
+                    // Cálculo minutos tramo 1
+                    if(this.form.horaE1 && this.form.horaS1) {
+                        let [hE, mE] = this.form.horaE1.split(':').map(Number);
+                        let [hS, mS] = this.form.horaS1.split(':').map(Number);
+                        let dE = new Date(2000, 0, 1, hE, mE);
+                        let dS = new Date(2000, 0, 1, hS, mS);
+                        if(dS <= dE) dS.setDate(dS.getDate() + 1);
+                        totalMin += (dS - dE) / 60000;
+                    }
+                    // Cálculo minutos tramo 2
+                    if(this.form.esPartida && this.form.horaE2 && this.form.horaS2) {
+                        let [hE, mE] = this.form.horaE2.split(':').map(Number);
+                        let [hS, mS] = this.form.horaS2.split(':').map(Number);
+                        let dE = new Date(2000, 0, 1, hE, mE);
+                        let dS = new Date(2000, 0, 1, hS, mS);
+                        if(dS <= dE) dS.setDate(dS.getDate() + 1);
+                        totalMin += (dS - dE) / 60000;
+                    }
+                    
+                    let hIni = this.form.horaE1;
+                    let hFin = (this.form.esPartida && this.form.horaS2) ? this.form.horaS2 : this.form.horaS1;
+                    let hTotal = totalMin / 60;
+
+                    // DIETAS CON LÓGICA DE TURNOS LARGOS (SUMANDO TODO)
+                    if ((hTotal >= 9 && hFin >= "15:00") || (hTotal >= 6 && hFin >= "15:30") || hFin === "15:00" || hFin === "15:30") {
+                        this.form.comida = "SI";
+                    } else if (hFin >= "14:30") {
+                        this.form.comida = "AVISO";
+                    } else {
+                        this.form.comida = "NO";
+                    }
+
+                    // CENA (SI TRABAJA 6H O MÁS Y TERMINA A LAS 23:00)
+                    if (hIni >= "13:00" && hFin >= "23:00" && hTotal >= 6) {
+                        this.form.cena = "SI";
+                    } else if (hFin >= "22:00" && hIni >= "13:00") {
+                        this.form.cena = "AVISO";
+                    } else {
+                        this.form.cena = "NO";
+                    }
+
+                    this.res.kmTotales = (parseInt(this.form.kmF1)-parseInt(this.form.kmI1) || 0) + (this.form.esPartida ? (parseInt(this.form.kmF2)-parseInt(this.form.kmI2) || 0) : 0);
+                    let dV = totalMin < 360 && totalMin > 0 ? 360 : totalMin;
+                    this.res.total = Math.floor(dV/60).toString().padStart(2,'0') + ":" + Math.round(dV%60).toString().padStart(2,'0');
+                    this.saveDraft();
+                },
+
+                get historyByWeeks() {
+                    const mesSel = `${this.año}-${String(this.mes+1).padStart(2,'0')}`;
+                    let f = this.history.filter(i => i.fecha.startsWith(mesSel)).sort((a,b) => a.fecha.localeCompare(b.fecha));
+                    let w = {}; this.totalMesH = 0; this.totalMesN = 0; this.totalMesK = 0; this.totalMesD = 0;
+                    f.forEach(item => {
+                        let d = new Date(item.fecha); 
+                        let wk = Math.ceil((((d - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1) / 7);
+                        if (!w[wk]) w[wk] = { num: wk, dias: [], totalH: 0 };
+                        w[wk].dias.push(item);
+                        let [h, m] = item.hStr.split(':').map(Number);
+                        let hd = h + (m/60);
+                        w[wk].totalH += hd; this.totalMesH += hd;
+                        this.totalMesN += parseFloat(item.noctH || 0);
+                        this.totalMesK += parseInt(item.km || 0);
+                        this.totalMesD += parseInt(item.dieta || 0);
+                    });
+                    this.totalMesH = parseFloat(this.totalMesH).toFixed(2);
+                    this.totalMesN = parseFloat(this.totalMesN).toFixed(2);
+                    return Object.values(w).sort((a,b) => b.num - a.num);
+                },
+
+                cambiarMes(v) { this.mes += v; if(this.mes<0){this.mes=11;this.año--} if(this.mes>11){this.mes=0;this.año++} this.renderCalendario(); },
+                estiloBoton(e) { if (e === 'SI') return 'bg-green-600 border-green-400 text-white'; if (e === 'AVISO') return 'badge-aviso border-yellow-600'; return 'bg-gray-800 border-gray-700 text-gray-500'; },
+                toggleDiet(t) { this.form[t] = this.form[t] === 'SI' ? 'NO' : 'SI'; this.saveDraft(); },
+                validarYCalcular() { if (this.form.horaS1 && !this.form.horaE1) { alert("¡Falta entrada!"); this.form.horaS1 = ''; return; } this.calcularTodo(); },
+                renderCalendario() {
+                    const days = new Date(this.año, this.mes + 1, 0).getDate();
+                    this.mesNombre = new Intl.DateTimeFormat('es-ES', { month: 'long' }).format(new Date(this.año, this.mes));
+                    this.diasCalendario = [];
+                    for(let i=1; i<=days; i++) {
+                        let f = `${this.año}-${String(this.mes+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                        this.diasCalendario.push({ num: i, fecha: f, isHoy: f === new Date().toISOString().split('T')[0] });
+                    }
+                },
+                seleccionarDia(f) { this.fechaSeleccionada = f; this.cargarHojaDesdeMemoria(); },
+                cargarHojaDesdeMemoria() {
+                    const saved = JSON.parse(localStorage.getItem('tmsa_drafts_v98') || '{}');
+                    this.form = saved[this.fechaSeleccionada] || { esPartida: false, bus1: '', bus2: '', horaE1: '', horaS1: '', kmI1: '', kmF1: '', horaE2: '', horaS2: '', kmI2: '', kmF2: '', comida: 'NO', cena: 'NO' };
+                    this.calcularTodo();
+                },
+                saveDraft() {
+                    const saved = JSON.parse(localStorage.getItem('tmsa_drafts_v98') || '{}');
+                    saved[this.fechaSeleccionada] = this.form;
+                    localStorage.setItem('tmsa_drafts_v98', JSON.stringify(saved));
+                },
+                guardarJornada() {
+                    if (!this.form.bus1) { alert("¡Falta el número de BUS!"); return; }
+                    this.history = this.history.filter(i => i.fecha !== this.fechaSeleccionada);
+                    const dietas = (this.form.comida === 'SI' ? 1 : 0) + (this.form.cena === 'SI' ? 1 : 0);
+                    const busText = this.form.esPartida && this.form.bus2 ? `${this.form.bus1}/${this.form.bus2}` : this.form.bus1;
+                    
+                    this.history.push({ 
+                        fecha: this.fechaSeleccionada, 
+                        bus: busText, 
+                        hStr: this.res.total, 
+                        dieta: dietas, 
+                        km: this.res.kmTotales, 
+                        noctH: this.res.noctMin,
+                        tipo: this.form.esPartida ? 'partida' : 'continua' 
+                    });
+                    
+                    localStorage.setItem('tmsa_history_v98', JSON.stringify(this.history));
+                    window.cloudSave(this.history);
+                    this.renderCalendario();
+                    alert("✅ Jornada Archivada"); 
+                    this.view = 'historial';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
